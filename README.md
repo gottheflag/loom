@@ -1,8 +1,8 @@
 # Loom
 
-Loom is a small, framework-agnostic PHP formatter for tokenized strings, identifiers, and portable relative paths.
+Loom is a small, framework-agnostic PHP formatter for tokenized strings.
 
-It deliberately does one thing: resolve a pattern such as `<year>/<month>/<uuid>.<ext>` into a final string. Loom has no Laravel dependency, performs no filesystem I/O, and is not a general-purpose template engine.
+Give it a pattern and values, and Loom resolves the tokens into a final string. It stays deliberately small: no framework coupling, no hidden state, and no recursive template evaluation.
 
 ## Requirements
 
@@ -19,13 +19,50 @@ composer require gottheflag/loom
 ```php
 use GotTheFlag\Loom\Loom;
 
-$id = Loom::format(
-    "DEP-<year><month><day>-<region>",
+$value = Loom::format(
+    "release-<year><month><day>-<region>",
     ["region" => "riyadh"],
 );
 ```
 
-Custom values are scalar values or `null`. Booleans become `1` or `0`, and `null` becomes an empty string.
+Custom values may be scalars, `null`, or lazy `Closure` values. Booleans become `1` or `0`, and `null` becomes an empty string.
+
+## Lazy values
+
+A token value may be a `Closure`. Loom evaluates it only when that token is actually present in the pattern:
+
+```php
+use GotTheFlag\Loom\Loom;
+
+$value = Loom::format(
+    "build-<number>-<nonce>",
+    [
+        "number" => fn () => 42,
+        "nonce" => fn () => bin2hex(random_bytes(4)),
+    ],
+);
+```
+
+Lazy values are resolved at most once per token in a single `format()` call, even when the token appears more than once:
+
+```php
+$calls = 0;
+
+$value = Loom::format(
+    "<counter>-<counter>",
+    [
+        "counter" => function () use (&$calls) {
+            return ++$calls;
+        },
+    ],
+);
+
+// 1-1
+```
+
+Unused closures are never invoked. A closure must return a scalar value or `null`. Exceptions thrown by a closure are not swallowed or wrapped by Loom.
+
+Loom intentionally accepts `Closure` rather than generic PHP `callable` values. This keeps ordinary strings such as `"strlen"` as strings instead of unexpectedly executing them.
 
 ## Built-in tokens
 
@@ -47,7 +84,7 @@ Loom provides these tokens when the caller does not override them:
 
 All date/time tokens in one `format()` call are derived from the same instant. Repeated generated tokens such as `<uuid>` also resolve to the same value within that call.
 
-For deterministic formatting, pass any `DateTimeInterface` implementation. Loom copies it and normalizes it to UTC without mutating the caller's object:
+For deterministic date/time formatting, pass any `DateTimeInterface` implementation. Loom copies it and normalizes it to UTC without mutating the caller's object:
 
 ```php
 use DateTimeImmutable;
@@ -63,13 +100,13 @@ $value = Loom::format(
 
 ## Custom values and overrides
 
-Caller values override built-ins intentionally:
+Caller values override built-ins intentionally, including lazy values:
 
 ```php
 $value = Loom::format(
     "<year>-<environment>",
     [
-        "year" => "FY26",
+        "year" => fn () => "FY26",
         "environment" => "prod",
     ],
 );
@@ -77,16 +114,16 @@ $value = Loom::format(
 // FY26-prod
 ```
 
-This also means domain-specific tokens stay outside Loom. A storage package can supply `<ext>` itself instead of making file extensions a Loom concern:
+This keeps domain-specific tokens outside Loom. Anything that can be represented as an allowed value can be supplied by the caller:
 
 ```php
-use GotTheFlag\Loom\Loom;
-use GotTheFlag\Loom\OutputType;
-
-$key = Loom::format(
-    "<year>/<month>/<uuid>.<ext>",
-    ["ext" => "png"],
-    type: OutputType::Path,
+$value = Loom::format(
+    "<namespace>:<resource>:<revision>",
+    [
+        "namespace" => "gtf",
+        "resource" => "example",
+        "revision" => 7,
+    ],
 );
 ```
 
@@ -101,13 +138,15 @@ Loom::format(
 );
 ```
 
-For outputs that need a stricter portable shape, use `OutputType`.
+For callers that want a stricter output shape, Loom also provides `OutputType`.
 
 ### Identifier
 
-`OutputType::Identifier` requires a non-empty ASCII identifier containing only letters, digits, `.`, `_`, `+`, and `-`.
+`OutputType::Identifier` requires a non-empty ASCII value containing only letters, digits, `.`, `_`, `+`, and `-`.
 
 ```php
+use GotTheFlag\Loom\OutputType;
+
 Loom::format(
     "DEP-<version>",
     ["version" => "2026_prod.1+hotfix"],
@@ -117,7 +156,7 @@ Loom::format(
 
 ### Path
 
-`OutputType::Path` validates a portable, relative, forward-slash-delimited path. It rejects traversal, absolute paths, empty segments, backslashes, unsafe characters, Windows reserved device names, trailing-dot segments, and segments longer than 255 bytes.
+`OutputType::Path` validates a portable, relative, forward-slash-delimited path. It rejects traversal, absolute paths, empty segments, backslashes, unsafe characters, reserved device names, trailing-dot segments, and segments longer than 255 bytes.
 
 ```php
 Loom::format(
@@ -127,7 +166,7 @@ Loom::format(
 );
 ```
 
-Path validation is lexical only. Loom never reads, writes, resolves, or canonicalizes filesystem paths. Applications may impose additional limits for their own storage backend or filesystem.
+Path validation is lexical only. Loom does not access or resolve the target, and callers may impose additional constraints for their own environment.
 
 ## Token syntax
 
@@ -147,7 +186,7 @@ Valid examples:
 
 Angle brackets are reserved for token syntax in the pattern. Token **values** are not reparsed, so a value may safely contain strings such as `<strong>Hello</strong>`.
 
-Unknown tokens, malformed token syntax, invalid token names, invalid values, or unsafe typed outputs throw `GotTheFlag\Loom\Exceptions\LoomException`.
+Unknown tokens, malformed token syntax, invalid token names, invalid values, invalid closure return values, or unsafe typed outputs throw `GotTheFlag\Loom\Exceptions\LoomException`.
 
 ## Public API
 
@@ -170,19 +209,25 @@ Install dependencies:
 composer update
 ```
 
+Run static analysis:
+
+```bash
+composer analyse
+```
+
 Run the strict test suite:
 
 ```bash
 composer test
 ```
 
-Audit dependencies:
+Audit dependencies with Composer's native command:
 
 ```bash
 composer audit --abandoned=fail
 ```
 
-CI validates Composer metadata, audits dependencies, tests PHP 8.3-8.5 on Linux and Windows, exercises the lowest supported dependency set, and performs a production-only install smoke test.
+CI validates Composer metadata, audits dependencies, runs static analysis, tests PHP 8.3-8.5 on Linux and Windows, exercises the lowest supported dependency set, and performs a production-only install smoke test. Dependabot watches both Composer dependencies and GitHub Actions for updates.
 
 ## License
 

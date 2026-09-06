@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GotTheFlag\Loom\Formatting;
 
+use Closure;
 use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
@@ -28,7 +29,7 @@ final class TokenFormatter {
 	];
 
 	/**
-	 * @param array<string, scalar|null> $values
+	 * @param array<string, scalar|Closure|null> $values
 	 */
 	public static function format(
 		string $pattern,
@@ -36,11 +37,17 @@ final class TokenFormatter {
 		?DateTimeInterface $at = null,
 	): string {
 		$requiredTokens = self::extractTokenNames($pattern);
-		$resolved = self::normalizeValues($values);
+		self::validateValues($values);
+
+		$resolved = [];
 		$utcAt = null;
 
 		foreach ($requiredTokens as $name) {
-			if (array_key_exists($name, $resolved)) {
+			if (array_key_exists($name, $values)) {
+				$resolved[$name] = self::resolveValue(
+					$name,
+					$values[$name],
+				);
 				continue;
 			}
 
@@ -61,8 +68,8 @@ final class TokenFormatter {
 
 		$tokens = [];
 
-		foreach ($requiredTokens as $name) {
-			$tokens["<{$name}>"] = $resolved[$name];
+		foreach ($resolved as $name => $value) {
+			$tokens["<{$name}>"] = $value;
 		}
 
 		return strtr($pattern, $tokens);
@@ -70,28 +77,46 @@ final class TokenFormatter {
 
 	/**
 	 * @param array<mixed, mixed> $values
-	 * @return array<string, string>
 	 */
-	private static function normalizeValues(array $values): array {
-		$normalized = [];
-
+	private static function validateValues(array $values): void {
 		foreach ($values as $name => $value) {
 			self::assertValidTokenName($name);
 
-			if (!is_scalar($value) && $value !== null) {
+			if (
+				!$value instanceof Closure
+				&& !is_scalar($value)
+				&& $value !== null
+			) {
 				throw new LoomException(
-					"Token [{$name}] must contain a scalar or null value.",
+					"Token [{$name}] must contain a scalar, null, or Closure.",
 				);
 			}
+		}
+	}
 
-			$normalized[$name] = match (true) {
-				$value === null => "",
-				is_bool($value) => $value ? "1" : "0",
-				default => (string) $value,
-			};
+	private static function resolveValue(
+		string $name,
+		mixed $value,
+	): string {
+		$fromClosure = $value instanceof Closure;
+
+		if ($fromClosure) {
+			$value = $value();
 		}
 
-		return $normalized;
+		if (!is_scalar($value) && $value !== null) {
+			$message = $fromClosure
+				? "Closure for token [{$name}] must return a scalar or null value."
+				: "Token [{$name}] must contain a scalar, null, or Closure.";
+
+			throw new LoomException($message);
+		}
+
+		return match (true) {
+			$value === null => "",
+			is_bool($value) => $value ? "1" : "0",
+			default => (string) $value,
+		};
 	}
 
 	/** @return list<string> */

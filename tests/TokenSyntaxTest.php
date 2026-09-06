@@ -39,7 +39,7 @@ final class TokenSyntaxTest extends TestCase {
 	public function test_invalid_token_value_is_rejected(): void {
 		$this->expectException(LoomException::class);
 		$this->expectExceptionMessage(
-			"Token [name] must contain a scalar or null value.",
+			"Token [name] must contain a scalar, null, or Closure.",
 		);
 
 		Loom::format(

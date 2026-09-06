@@ -53,6 +53,7 @@ final class OutputTypeTest extends TestCase {
 		);
 	}
 
+	/** @return iterable<string, array{string}> */
 	public static function unsafeIdentifierProvider(): iterable {
 		yield "empty" => [""];
 		yield "path" => ["releases/stable"];
@@ -87,6 +88,7 @@ final class OutputTypeTest extends TestCase {
 		);
 	}
 
+	/** @return iterable<string, array{string}> */
 	public static function unsafePathProvider(): iterable {
 		yield "empty" => [""];
 		yield "absolute" => ["/etc/passwd"];
@@ -117,6 +119,7 @@ final class OutputTypeTest extends TestCase {
 		);
 	}
 
+	/** @return iterable<string, array{string}> */
 	public static function reservedWindowsNameProvider(): iterable {
 		yield "CON" => ["CON"];
 		yield "CON extension" => ["CON.txt"];
