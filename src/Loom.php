@@ -5,12 +5,36 @@ declare(strict_types=1);
 namespace GotTheFlag\Loom;
 
 use GotTheFlag\Loom\Exceptions\LoomException;
+use DateTimeImmutable;
+use DateTimeZone;
 
 final class Loom {
 	public static function format(
 		string $pattern,
 		array $values = [],
+		?DateTimeImmutable $at = null,
 	): string {
+		$at = ($at ?? new DateTimeImmutable(
+			"now",
+			new DateTimeZone("UTC"),
+		))->setTimezone(new DateTimeZone("UTC"));
+
+		$values = array_replace(
+			[
+				"date" => $at->format("Y-m-d"),
+				"datetime" => $at->format("Ymd\\THis\\Z"),
+				"timestamp" => $at->format("U"),
+
+				"year" => $at->format("Y"),
+				"month" => $at->format("m"),
+				"day" => $at->format("d"),
+				"hour" => $at->format("H"),
+				"minute" => $at->format("i"),
+				"second" => $at->format("s"),
+			],
+			$values,
+		);
+
 		$tokens = [];
 
 		foreach ($values as $name => $value) {
