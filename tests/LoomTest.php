@@ -8,6 +8,7 @@ use GotTheFlag\Loom\Exceptions\LoomException;
 use GotTheFlag\Loom\Loom;
 use PHPUnit\Framework\TestCase;
 use DateTimeImmutable;
+use GotTheFlag\Loom\OutputType;
 
 final class LoomTest extends TestCase {
 	public function test_it_formats_values(): void {
@@ -102,7 +103,7 @@ final class LoomTest extends TestCase {
 					"year" => "FY26",
 					"name" => "release",
 				],
-				new DateTimeImmutable("2026-06-09 UTC"),
+				at: new DateTimeImmutable("2026-06-09 UTC"),
 			),
 		);
 	}
@@ -135,6 +136,74 @@ final class LoomTest extends TestCase {
 					"ulid" => "fixed-ulid",
 				],
 			),
+		);
+	}
+
+	public function test_text_output_allows_arbitrary_text(): void {
+		$this->assertSame(
+			"Hello, world! 👋",
+			Loom::format(
+				"Hello, <name>! 👋",
+				["name" => "world"],
+			),
+		);
+	}
+
+	public function test_identifier_output_accepts_portable_identifier(): void {
+		$this->assertSame(
+			"DEP-2026_prod.1",
+			Loom::format(
+				"DEP-<version>",
+				["version" => "2026_prod.1"],
+				OutputType::Identifier,
+			),
+		);
+	}
+
+	public function test_identifier_output_rejects_path(): void {
+		$this->expectException(LoomException::class);
+		$this->expectExceptionMessage(
+			"Generated identifier is unsafe.",
+		);
+
+		Loom::format(
+			"releases/<name>",
+			["name" => "stable"],
+			OutputType::Identifier,
+		);
+	}
+
+	public function test_path_output_accepts_nested_path(): void {
+		$this->assertSame(
+			"2026/09/release.zip",
+			Loom::format(
+				"<year>/<month>/<file>",
+				["file" => "release.zip"],
+				OutputType::Path,
+				new DateTimeImmutable("2026-09-06 UTC"),
+			),
+		);
+	}
+
+	public function test_path_output_rejects_traversal(): void {
+		$this->expectException(LoomException::class);
+
+		Loom::format(
+			"<directory>/../secret.txt",
+			["directory" => "files"],
+			OutputType::Path,
+		);
+	}
+
+	public function test_path_output_rejects_reserved_windows_names(): void {
+		$this->expectException(LoomException::class);
+		$this->expectExceptionMessage(
+			"Generated path contains a reserved segment.",
+		);
+
+		Loom::format(
+			"uploads/CON.txt",
+			type: OutputType::Path,
 		);
 	}
 }

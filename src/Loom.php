@@ -14,6 +14,7 @@ final class Loom {
 	public static function format(
 		string $pattern,
 		array $values = [],
+		OutputType $type = OutputType::Text,
 		?DateTimeImmutable $at = null,
 	): string {
 		$at = ($at ?? new DateTimeImmutable(
@@ -88,6 +89,70 @@ final class Loom {
 			);
 		}
 
+		self::validateOutput($result, $type);
+
 		return $result;
+	}
+
+	private static function validateOutput(
+		string $result,
+		OutputType $type,
+	): void {
+		match ($type) {
+			OutputType::Text => null,
+			OutputType::Identifier => self::validateIdentifier($result),
+			OutputType::Path => self::validatePath($result),
+		};
+	}
+
+	private static function validateIdentifier(string $result): void {
+		if (
+			$result === ""
+			|| preg_match('/\A[A-Za-z0-9._+-]+\z/', $result) !== 1
+		) {
+			throw new LoomException(
+				"Generated identifier is unsafe.",
+			);
+		}
+	}
+
+	private static function validatePath(string $result): void {
+		if (
+			$result === ""
+			|| preg_match('/\A[A-Za-z0-9._+\/-]+\z/', $result) !== 1
+		) {
+			throw new LoomException(
+				"Generated path is unsafe.",
+			);
+		}
+
+		foreach (explode("/", $result) as $segment) {
+			self::validatePathSegment($segment);
+		}
+	}
+
+	private static function validatePathSegment(string $segment): void {
+		if (
+			$segment === ""
+			|| $segment === "."
+			|| $segment === ".."
+			|| strlen($segment) > 255
+			|| str_ends_with($segment, ".")
+		) {
+			throw new LoomException(
+				"Generated path contains an unsafe segment.",
+			);
+		}
+
+		if (
+			preg_match(
+				'/\A(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?\z/i',
+				$segment,
+			) === 1
+		) {
+			throw new LoomException(
+				"Generated path contains a reserved segment.",
+			);
+		}
 	}
 }
