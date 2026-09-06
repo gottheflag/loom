@@ -1,0 +1,71 @@
+{
+	"name": "gottheflag/loom",
+	"description": "Framework-agnostic token formatting for strings.",
+	"type": "library",
+	"license": "Apache-2.0",
+	"keywords": [
+		"formatter",
+		"interpolation",
+		"placeholder",
+		"string",
+		"token",
+		"uid",
+		"ulid",
+		"uuid"
+	],
+	"homepage": "https://github.com/gottheflag/loom",
+	"authors": [
+		{
+			"name": "Got The Flag",
+			"homepage": "https://github.com/gottheflag"
+		}
+	],
+	"support": {
+		"issues": "https://github.com/gottheflag/loom/issues",
+		"source": "https://github.com/gottheflag/loom"
+	},
+	"require": {
+		"php": "^8.3",
+		"symfony/uid": "^7.2 || ^8.0"
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^2.2.13",
+		"phpunit/phpunit": "^12.5.34"
+	},
+	"autoload": {
+		"psr-4": {
+			"GotTheFlag\\Loom\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"GotTheFlag\\Loom\\Tests\\": "tests/"
+		}
+	},
+	"config": {
+		"allow-plugins": false,
+		"sort-packages": true,
+		"policy": {
+			"advisories": {
+				"block": true,
+				"audit": "fail"
+			},
+			"abandoned": {
+				"block": true,
+				"audit": "fail"
+			},
+			"malware": {
+				"block": true,
+				"audit": "fail"
+			}
+		}
+	},
+	"scripts": {
+		"analyse": "phpstan analyse --no-progress",
+		"test": "phpunit"
+	},
+	"scripts-descriptions": {
+		"analyse": "Run static analysis.",
+		"test": "Run the test suite."
+	}
+}
