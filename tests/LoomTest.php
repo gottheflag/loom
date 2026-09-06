@@ -51,7 +51,7 @@ final class LoomTest extends TestCase {
 		Loom::format("hello-<missing>");
 	}
 
-	public function test_invalid_token_name_is_rejected(): void {
+	public function test_empty_value_token_name_is_rejected(): void {
 		$this->expectException(LoomException::class);
 
 		Loom::format(
@@ -230,7 +230,7 @@ final class LoomTest extends TestCase {
 		);
 	}
 
-	public function test_invalid_token_name_is_rejected(): void {
+	public function test_invalid_pattern_token_name_is_rejected(): void {
 		$this->expectException(LoomException::class);
 
 		Loom::format(
