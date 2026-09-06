@@ -11,12 +11,17 @@ use Symfony\Component\Uid\Ulid;
 use Symfony\Component\Uid\Uuid;
 
 final class Loom {
+	private const TOKEN_NAME_PATTERN =
+	"/\A[A-Za-z][A-Za-z0-9_-]*\z/";
+
 	public static function format(
 		string $pattern,
 		array $values = [],
 		OutputType $type = OutputType::Text,
 		?DateTimeImmutable $at = null,
 	): string {
+		$requiredTokens = self::extractTokenNames($pattern);
+
 		$at = ($at ?? new DateTimeImmutable(
 			"now",
 			new DateTimeZone("UTC"),
@@ -41,14 +46,14 @@ final class Loom {
 		$generated = [];
 
 		if (
-			str_contains($pattern, "<uuid>")
+			in_array("uuid", $requiredTokens, true)
 			&& !array_key_exists("uuid", $values)
 		) {
 			$generated["uuid"] = Uuid::v4()->toRfc4122();
 		}
 
 		if (
-			str_contains($pattern, "<ulid>")
+			in_array("ulid", $requiredTokens, true)
 			&& !array_key_exists("ulid", $values)
 		) {
 			$generated["ulid"] = (new Ulid())->toBase32();
@@ -62,9 +67,12 @@ final class Loom {
 		$tokens = [];
 
 		foreach ($values as $name => $value) {
-			if (!is_string($name) || $name === "") {
+			if (
+				!is_string($name)
+				|| preg_match(self::TOKEN_NAME_PATTERN, $name) !== 1
+			) {
 				throw new LoomException(
-					"Token names must be non-empty strings.",
+					"Invalid token name [{$name}].",
 				);
 			}
 
@@ -81,13 +89,15 @@ final class Loom {
 			};
 		}
 
-		$result = strtr($pattern, $tokens);
-
-		if (preg_match('/<[^<>]+>/', $result, $match) === 1) {
-			throw new LoomException(
-				"Unknown token [{$match[0]}].",
-			);
+		foreach ($requiredTokens as $name) {
+			if (!array_key_exists($name, $values)) {
+				throw new LoomException(
+					"Unknown token [<{$name}>].",
+				);
+			}
 		}
+
+		$result = strtr($pattern, $tokens);
 
 		self::validateOutput($result, $type);
 
@@ -154,5 +164,48 @@ final class Loom {
 				"Generated path contains a reserved segment.",
 			);
 		}
+	}
+
+	private static function extractTokenNames(string $pattern): array {
+		preg_match_all(
+			'/<([^<>]*)>/',
+			$pattern,
+			$matches,
+		);
+
+		$names = [];
+
+		foreach ($matches[1] as $name) {
+			if (
+				preg_match(
+					self::TOKEN_NAME_PATTERN,
+					$name,
+				) !== 1
+			) {
+				throw new LoomException(
+					"Invalid token name [{$name}].",
+				);
+			}
+
+			$names[] = $name;
+		}
+
+		$remaining = preg_replace(
+			'/<[^<>]*>/',
+			"",
+			$pattern,
+		);
+
+		if (
+			$remaining === null
+			|| str_contains($remaining, "<")
+			|| str_contains($remaining, ">")
+		) {
+			throw new LoomException(
+				"Malformed token syntax.",
+			);
+		}
+
+		return array_values(array_unique($names));
 	}
 }

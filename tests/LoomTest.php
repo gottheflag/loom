@@ -206,4 +206,69 @@ final class LoomTest extends TestCase {
 			type: OutputType::Path,
 		);
 	}
+
+	public function test_token_values_may_contain_angle_brackets(): void {
+		$this->assertSame(
+			"<strong>Hello</strong>",
+			Loom::format(
+				"<message>",
+				["message" => "<strong>Hello</strong>"],
+			),
+		);
+	}
+
+	public function test_snake_and_kebab_token_names_are_supported(): void {
+		$this->assertSame(
+			"user-riyadh-1",
+			Loom::format(
+				"<user_id>-<region-1>",
+				[
+					"user_id" => "user",
+					"region-1" => "riyadh-1",
+				],
+			),
+		);
+	}
+
+	public function test_invalid_token_name_is_rejected(): void {
+		$this->expectException(LoomException::class);
+
+		Loom::format(
+			"<user name>",
+			["user name" => "Khaled"],
+		);
+	}
+
+	public function test_empty_token_is_rejected(): void {
+		$this->expectException(LoomException::class);
+
+		Loom::format("<>");
+	}
+
+	public function test_unclosed_token_is_rejected(): void {
+		$this->expectException(LoomException::class);
+		$this->expectExceptionMessage(
+			"Malformed token syntax.",
+		);
+
+		Loom::format("<name");
+	}
+
+	public function test_unopened_token_is_rejected(): void {
+		$this->expectException(LoomException::class);
+		$this->expectExceptionMessage(
+			"Malformed token syntax.",
+		);
+
+		Loom::format("name>");
+	}
+
+	public function test_nested_token_syntax_is_rejected(): void {
+		$this->expectException(LoomException::class);
+
+		Loom::format(
+			"<<name>>",
+			["name" => "value"],
+		);
+	}
 }
