@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace GotTheFlag\Loom;
 
-enum OutputType {
-	case Text;
-	case Identifier;
-	case Path;
+enum OutputType: string {
+	case Text = "text";
+	case Identifier = "identifier";
+	case Path = "path";
 }

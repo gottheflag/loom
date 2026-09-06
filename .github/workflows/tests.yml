@@ -7,13 +7,19 @@ on:
 permissions:
     contents: read
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     tests:
+        name: PHP ${{ matrix.php }} / ${{ matrix.os }}
+        timeout-minutes: 10
         strategy:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest, windows-latest]
-                php: ["8.3", "8.4"]
+                php: ["8.3", "8.4", "8.5"]
 
         runs-on: ${{ matrix.os }}
 
@@ -24,15 +30,70 @@ jobs:
               with:
                   php-version: ${{ matrix.php }}
                   coverage: none
+                  tools: composer:v2
 
-            - name: Validate Composer
+            - name: Validate Composer metadata
               run: composer validate --strict --no-check-lock
 
-            - name: Install dependencies
-              run: composer install --no-interaction --prefer-dist
+            - name: Resolve latest compatible dependencies
+              run: composer update --no-interaction --prefer-dist --no-progress
 
-            - name: Security audit
+            - name: Audit dependencies
               run: composer audit --abandoned=fail
 
-            - name: Tests
-              run: vendor/bin/phpunit --fail-on-warning --fail-on-risky --fail-on-skipped
+            - name: Run strict tests
+              run: composer test
+
+    lowest-dependencies:
+        name: Lowest dependencies / PHP 8.3
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: "8.3"
+                  coverage: none
+                  tools: composer:v2
+
+            - name: Validate Composer metadata
+              run: composer validate --strict --no-check-lock
+
+            - name: Resolve lowest supported dependencies
+              run: composer update --no-interaction --prefer-dist --prefer-lowest --prefer-stable --no-progress
+
+            - name: Audit dependencies
+              run: composer audit --abandoned=fail
+
+            - name: Run strict tests
+              run: composer test
+
+    production-smoke:
+        name: Production install smoke test
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: "8.3"
+                  coverage: none
+                  tools: composer:v2
+
+            - name: Validate Composer metadata
+              run: composer validate --strict --no-check-lock
+
+            - name: Install runtime dependencies only
+              run: composer update --no-dev --no-interaction --prefer-dist --no-progress
+
+            - name: Audit runtime dependencies
+              run: composer audit --no-dev --abandoned=fail
+
+            - name: Smoke test public API
+              shell: bash
+              run: |
+                  php -r 'require "vendor/autoload.php"; exit(\GotTheFlag\Loom\Loom::format("release-<id>", ["id" => 42]) === "release-42" ? 0 : 1);'

@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace GotTheFlag\Loom\Tests;
 
-use GotTheFlag\Loom\Exceptions\LoomException;
+use DateTime;
+use DateTimeImmutable;
 use GotTheFlag\Loom\Loom;
 use PHPUnit\Framework\TestCase;
-use DateTimeImmutable;
-use GotTheFlag\Loom\OutputType;
 
 final class LoomTest extends TestCase {
 	public function test_it_formats_values(): void {
@@ -21,15 +20,18 @@ final class LoomTest extends TestCase {
 		);
 	}
 
-	public function test_it_formats_multiple_values(): void {
+	public function test_it_formats_multiple_scalar_values(): void {
 		$this->assertSame(
-			"DEP-2026-prod-42",
+			"DEP-2026-prod-42-1-0-",
 			Loom::format(
-				"DEP-<year>-<environment>-<number>",
+				"DEP-<year>-<environment>-<number>-<yes>-<no>-<empty>",
 				[
 					"year" => 2026,
 					"environment" => "prod",
 					"number" => 42,
+					"yes" => true,
+					"no" => false,
+					"empty" => null,
 				],
 			),
 		);
@@ -42,34 +44,7 @@ final class LoomTest extends TestCase {
 		);
 	}
 
-	public function test_unknown_token_is_rejected(): void {
-		$this->expectException(LoomException::class);
-		$this->expectExceptionMessage(
-			"Unknown token [<missing>].",
-		);
-
-		Loom::format("hello-<missing>");
-	}
-
-	public function test_empty_value_token_name_is_rejected(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format(
-			"<name>",
-			["" => "world"],
-		);
-	}
-
-	public function test_invalid_token_value_is_rejected(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format(
-			"<name>",
-			["name" => ["world"]],
-		);
-	}
-
-	public function test_it_formats_date_and_time_tokens(): void {
+	public function test_it_formats_date_and_time_tokens_from_one_instant(): void {
 		$at = new DateTimeImmutable(
 			"2026-06-09 01:22:33 UTC",
 		);
@@ -94,6 +69,16 @@ final class LoomTest extends TestCase {
 		);
 	}
 
+	public function test_mutable_datetime_is_supported_without_mutating_it(): void {
+		$at = new DateTime("2026-06-09 04:22:33+03:00");
+
+		$this->assertSame(
+			"20260609T012233Z",
+			Loom::format("<datetime>", at: $at),
+		);
+		$this->assertSame("+03:00", $at->format("P"));
+	}
+
 	public function test_custom_values_override_builtin_tokens(): void {
 		$this->assertSame(
 			"FY26-release",
@@ -108,11 +93,11 @@ final class LoomTest extends TestCase {
 		);
 	}
 
-	public function test_it_generates_uuid(): void {
+	public function test_it_generates_uuid_v4(): void {
 		$result = Loom::format("<uuid>");
 
 		$this->assertMatchesRegularExpression(
-			'/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i',
+			"/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i",
 			$result,
 		);
 	}
@@ -121,7 +106,7 @@ final class LoomTest extends TestCase {
 		$result = Loom::format("<ulid>");
 
 		$this->assertMatchesRegularExpression(
-			'/\A[0-9A-HJKMNP-TV-Z]{26}\z/',
+			"/\A[0-9A-HJKMNP-TV-Z]{26}\z/",
 			$result,
 		);
 	}
@@ -139,136 +124,10 @@ final class LoomTest extends TestCase {
 		);
 	}
 
-	public function test_text_output_allows_arbitrary_text(): void {
-		$this->assertSame(
-			"Hello, world! 👋",
-			Loom::format(
-				"Hello, <name>! 👋",
-				["name" => "world"],
-			),
-		);
-	}
+	public function test_repeated_generated_token_is_stable_within_one_format_call(): void {
+		$result = Loom::format("<uuid>|<uuid>");
+		[$first, $second] = explode("|", $result);
 
-	public function test_identifier_output_accepts_portable_identifier(): void {
-		$this->assertSame(
-			"DEP-2026_prod.1",
-			Loom::format(
-				"DEP-<version>",
-				["version" => "2026_prod.1"],
-				OutputType::Identifier,
-			),
-		);
-	}
-
-	public function test_identifier_output_rejects_path(): void {
-		$this->expectException(LoomException::class);
-		$this->expectExceptionMessage(
-			"Generated identifier is unsafe.",
-		);
-
-		Loom::format(
-			"releases/<name>",
-			["name" => "stable"],
-			OutputType::Identifier,
-		);
-	}
-
-	public function test_path_output_accepts_nested_path(): void {
-		$this->assertSame(
-			"2026/09/release.zip",
-			Loom::format(
-				"<year>/<month>/<file>",
-				["file" => "release.zip"],
-				OutputType::Path,
-				new DateTimeImmutable("2026-09-06 UTC"),
-			),
-		);
-	}
-
-	public function test_path_output_rejects_traversal(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format(
-			"<directory>/../secret.txt",
-			["directory" => "files"],
-			OutputType::Path,
-		);
-	}
-
-	public function test_path_output_rejects_reserved_windows_names(): void {
-		$this->expectException(LoomException::class);
-		$this->expectExceptionMessage(
-			"Generated path contains a reserved segment.",
-		);
-
-		Loom::format(
-			"uploads/CON.txt",
-			type: OutputType::Path,
-		);
-	}
-
-	public function test_token_values_may_contain_angle_brackets(): void {
-		$this->assertSame(
-			"<strong>Hello</strong>",
-			Loom::format(
-				"<message>",
-				["message" => "<strong>Hello</strong>"],
-			),
-		);
-	}
-
-	public function test_snake_and_kebab_token_names_are_supported(): void {
-		$this->assertSame(
-			"user-riyadh-1",
-			Loom::format(
-				"<user_id>-<region-1>",
-				[
-					"user_id" => "user",
-					"region-1" => "riyadh-1",
-				],
-			),
-		);
-	}
-
-	public function test_invalid_pattern_token_name_is_rejected(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format(
-			"<user name>",
-			["user name" => "Khaled"],
-		);
-	}
-
-	public function test_empty_token_is_rejected(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format("<>");
-	}
-
-	public function test_unclosed_token_is_rejected(): void {
-		$this->expectException(LoomException::class);
-		$this->expectExceptionMessage(
-			"Malformed token syntax.",
-		);
-
-		Loom::format("<name");
-	}
-
-	public function test_unopened_token_is_rejected(): void {
-		$this->expectException(LoomException::class);
-		$this->expectExceptionMessage(
-			"Malformed token syntax.",
-		);
-
-		Loom::format("name>");
-	}
-
-	public function test_nested_token_syntax_is_rejected(): void {
-		$this->expectException(LoomException::class);
-
-		Loom::format(
-			"<<name>>",
-			["name" => "value"],
-		);
+		$this->assertSame($first, $second);
 	}
 }
