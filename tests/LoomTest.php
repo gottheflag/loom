@@ -106,4 +106,35 @@ final class LoomTest extends TestCase {
 			),
 		);
 	}
+
+	public function test_it_generates_uuid(): void {
+		$result = Loom::format("<uuid>");
+
+		$this->assertMatchesRegularExpression(
+			'/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i',
+			$result,
+		);
+	}
+
+	public function test_it_generates_ulid(): void {
+		$result = Loom::format("<ulid>");
+
+		$this->assertMatchesRegularExpression(
+			'/\A[0-9A-HJKMNP-TV-Z]{26}\z/',
+			$result,
+		);
+	}
+
+	public function test_generated_tokens_can_be_overridden(): void {
+		$this->assertSame(
+			"fixed-uuid/fixed-ulid",
+			Loom::format(
+				"<uuid>/<ulid>",
+				[
+					"uuid" => "fixed-uuid",
+					"ulid" => "fixed-ulid",
+				],
+			),
+		);
+	}
 }

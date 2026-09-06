@@ -7,6 +7,8 @@ namespace GotTheFlag\Loom;
 use GotTheFlag\Loom\Exceptions\LoomException;
 use DateTimeImmutable;
 use DateTimeZone;
+use Symfony\Component\Uid\Ulid;
+use Symfony\Component\Uid\Uuid;
 
 final class Loom {
 	public static function format(
@@ -32,6 +34,27 @@ final class Loom {
 				"minute" => $at->format("i"),
 				"second" => $at->format("s"),
 			],
+			$values,
+		);
+
+		$generated = [];
+
+		if (
+			str_contains($pattern, "<uuid>")
+			&& !array_key_exists("uuid", $values)
+		) {
+			$generated["uuid"] = Uuid::v4()->toRfc4122();
+		}
+
+		if (
+			str_contains($pattern, "<ulid>")
+			&& !array_key_exists("ulid", $values)
+		) {
+			$generated["ulid"] = (new Ulid())->toBase32();
+		}
+
+		$values = array_replace(
+			$generated,
 			$values,
 		);
 
